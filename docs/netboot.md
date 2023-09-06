@@ -10,6 +10,9 @@
     + [Configuring BMC Access](#configuring-bmc-access)
     + [Configuring Serial Over LAN (SOL)](#configuring-serial-over-lan-sol)
 - [Configuring PXE Booting](#configuring-pxe-booting)
+- [Changing Boot Order with `efibootmgr`](#changing-boot-order-with-efibootmgr)
+- [Accessing the UEFI/BIOS Firmware Menu via SOL](#accessing-the-uefibios-firmware-menu-via-sol)
+- [Enabling Redfish](#enabling-redfish)
 
 # Scope
 
@@ -155,3 +158,64 @@ firmware settings menu.
    The node should be all set to PXE boot. Go to the **Save & Exit** menu and
    select **Save Changes and Exit**. The node will reboot and attempt to PXE
    boot.
+
+# Changing Boot Order with `efibootmgr`
+
+**NOTE:** There does not seem to be a way to directly boot to the UEFI firmware
+configuration menu via `efibootmgr`. To do this, see [Accessing the UEFI/BIOS
+Firmware Menu via SOL](#accessing-the-uefibios-firmware-menu-via-sol).
+
+In modern UEFI firmware, one can configure how the system will boot the next
+time it boots using an OS-level tool: `efibootmgr`. To see a list of boot
+options, run the following command:
+
+```
+# efibootmgr
+BootCurrent: 0002
+Timeout: 2 seconds
+BootOrder: 0002,0003,0004,0005,0000,0006,0001
+Boot0000* CentOS
+Boot0001* UEFI: Built-in EFI Shell
+Boot0002* UEFI: PXE IP4 Intel(R) I350 Gigabit Network Connection
+Boot0003* UEFI: PXE IP4 Intel(R) I350 Gigabit Network Connection
+Boot0004* UEFI: PXE IP6 Intel(R) I350 Gigabit Network Connection
+Boot0005* UEFI: PXE IP6 Intel(R) I350 Gigabit Network Connection
+Boot0006* CentOS
+```
+
+One can see that the current boot is a network (PXE) boot off of one of the
+ethernet cards using IPv4.
+
+To change the next boot, take the numeric portion from the `BootXXXX*` entry
+(e.g. `0001`) and pass that to `efiboot -n`:
+
+```
+# efibootmgr -n 0001
+BootNext: 0001
+[...]
+```
+
+The next time the system boots, it will boot to the entry that was specified.
+
+Normally, one would spam a certain key (e.g. Del) when the machine POSTs (Power
+On Self-Test) to boot into the UEFI/BIOS firmware menu. However, sometimes the
+serial-over-LAN (SOL) console does not respond to this. Luckily, in modern UEFI
+firmware, one can configure boot settings with OS-level tools.
+
+# Accessing the UEFI/BIOS Firmware Menu via SOL
+
+To reboot directly into the UEFI/BIOS firmware configuration menu, run:
+
+```
+# systemctl reboot --firmware-setup
+```
+
+# Configuring RedFish
+
+To enable RedFish, the setting in the UEFI/BIOS firmware menu must be enabled.
+Boot into the UEFI/BIOS firmware menu. See [Accessing the UEFI/BIOS Firmware
+Menu via SOL](#accessing-the-uefibios-firmware-menu-via-sol)
+
+From the firmware configuration menu, go to the **Advanced** tab and select
+**Redfish Host Interface Settings**. Here, Redfish network and authentication
+settings can be configured.
