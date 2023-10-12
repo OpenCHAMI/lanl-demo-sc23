@@ -26,7 +26,20 @@ networks:
   smd:
 
 services:
+  tftp-server:
+    container_name: tftp-server
+    hostname: tftp-server
+    image: bikeshack/tftp-server:v1.1
+    network_mode: "host"
+  dhcpd-server:
+    container_name: dhcpd-server
+    hostname: dhcpd
+    image: docker.io/networkboot/dhcpd:latest
+    network_mode: "host"
+    volumes:
+      - /data/dhcpd:/data
   postgres:
+    container_name: smd-postgres
     hostname: postgres
     image: postgres:11-alpine
     environment:
@@ -38,6 +51,7 @@ services:
     networks:
       - smd
   smd-init:
+    container_name: smd-init
     image: docker.io/bikeshack/smd:v2.12.0
     environment:
       - POSTGRES_HOST=postgres
@@ -51,6 +65,7 @@ services:
       - /usr/local/bin/smd-init 
       - -dbhost=postgres
   smd:
+    container_name: smd
     image: docker.io/bikeshack/smd:v2.12.0
     environment:
       - POSTGRES_HOST=postgres
