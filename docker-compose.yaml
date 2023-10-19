@@ -50,8 +50,6 @@ services:
       - POSTGRES_PASSWORD=bssuser
       - POSTGRES_USER=bssuser
       - POSTGRES_DB=bssdb
-    ports:
-      - '5433:5432'
     networks:
       - bss
   # boot-script-service
@@ -61,7 +59,7 @@ services:
     image: docker.io/bikeshack/hms-bss:v1.26.0-ochami
     environment:
       - POSTGRES_HOST=postgres-bss
-      - POSTGRES_PORT=5433
+      - POSTGRES_PORT=5432
       - SQL_USER=bssuser
       - SQL_PASSWORD=bssuser
     ports:
@@ -85,8 +83,6 @@ services:
       - POSTGRES_PASSWORD=hmsdsuser
       - POSTGRES_USER=hmsdsuser
       - POSTGRES_DB=hmsds
-    ports:
-      - "5432:5432"
     networks:
       - smd
   # sets up postgres for SMD data
