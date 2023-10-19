@@ -44,6 +44,7 @@ services:
   # postrges DB for hms-bss
   postgres-bss:
     hostname: postgres-bss
+    container_name: postgres-bss
     image: postgres:11-alpine
     environment:
       - POSTGRES_PASSWORD=bssuser
@@ -77,8 +78,8 @@ services:
       retries: 5
   # postgres DB for SMD
   postgres-smd:
-    container_name: smd-postgres
-    hostname: postgres
+    container_name: postgres-smd
+    hostname: postgres-smd
     image: postgres:11-alpine
     environment:
       - POSTGRES_PASSWORD=hmsdsuser
