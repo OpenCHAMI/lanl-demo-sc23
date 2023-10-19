@@ -107,7 +107,6 @@ services:
       - smd
     entrypoint:
       - /smd-init 
-      - -dbhost=postgres
   # SMD 
   smd:
     container_name: smd
