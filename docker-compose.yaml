@@ -24,13 +24,16 @@ version: '3.7'
 
 networks:
   smd:
+  bss:
 
 services:
+  # TFTP server with built in ipxe binaries
   tftp-server:
     container_name: tftp-server
     hostname: tftp-server
     image: bikeshack/tftp-server:v1.1
     network_mode: "host"
+  # Standard DHCP. Requires external config
   dhcpd-server:
     container_name: dhcpd-server
     hostname: dhcpd
@@ -38,7 +41,40 @@ services:
     network_mode: "host"
     volumes:
       - /data/dhcpd:/data
-  postgres:
+  # postrges DB for hms-bss
+  postgres-bss:
+    hostname: postgres-bss
+    image: postgres:11-alpine
+    environment:
+      - POSTGRES_PASSWORD=bssuser
+      - POSTGRES_USER=bssuser
+      - POSTGRES_DB=bssdb
+    ports:
+      - '5432:5432'
+    networks:
+      - bss
+  # boot-script-service
+  bss:
+    hostname: bss
+    environment:
+      - POSTGRES_HOST=postgres-bss
+      - POSTGRES_PORT=5432
+      - SQL_USER=bssuser
+      - SQL_PASSWORD=bssuser
+    ports:
+      - '27778:27778'
+    depends_on:
+      - postgres-bss
+      - smd
+    networks:
+      - bss
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:27778/boot/v1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+  # postgres DB for SMD
+  postgres-smd:
     container_name: smd-postgres
     hostname: postgres
     image: postgres:11-alpine
@@ -50,6 +86,7 @@ services:
       - "5432:5432"
     networks:
       - smd
+  # sets up postgres for SMD data
   smd-init:
     container_name: smd-init
     image: docker.io/bikeshack/smd:v2.12.0
@@ -64,6 +101,7 @@ services:
     entrypoint:
       - /usr/local/bin/smd-init 
       - -dbhost=postgres
+  # SMD 
   smd:
     container_name: smd
     image: docker.io/bikeshack/smd:v2.12.0
