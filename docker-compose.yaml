@@ -94,8 +94,12 @@ services:
     container_name: smd-init
     image: docker.io/bikeshack/smd:v2.12.11-ochami
     environment:
-      - POSTGRES_HOST=postgres-smd
-      - POSTGRES_PORT=5432
+      - SMD_DBHOST=postgres-smd
+      - SMD_DBPORT=5432
+      - SMD_DBUSER=hmsdsuser
+      - SMD_DBPASS=hmsdsuser
+      - SMD_DBNAME=hmsds
+      - SMD_DBOPTS=sslmode=disable
     hostname: smd-init
     depends_on:
       - postgres-smd
@@ -109,8 +113,12 @@ services:
     container_name: smd
     image: docker.io/bikeshack/smd:v2.12.11-ochami
     environment:
-      - POSTGRES_HOST=postgres-smd
-      - POSTGRES_PORT=5432
+      - SMD_DBHOST=postgres-smd
+      - SMD_DBPORT=5432
+      - SMD_DBUSER=hmsdsuser
+      - SMD_DBPASS=hmsdsuser
+      - SMD_DBNAME=hmsds
+      - SMD_DBOPTS=sslmode=disable
     hostname: smd
     depends_on:
       - postgres-smd
