@@ -24,40 +24,99 @@ version: '3.7'
 
 networks:
   smd:
+  bss:
 
 services:
-  postgres:
-    hostname: postgres
+  # TFTP server with built in ipxe binaries
+  tftp-server:
+    container_name: tftp-server
+    hostname: tftp-server
+    image: bikeshack/tftp-server:v1.1
+    network_mode: "host"
+  # Standard DHCP. Requires external config
+  dhcpd-server:
+    container_name: dhcpd-server
+    hostname: dhcpd
+    image: docker.io/networkboot/dhcpd:latest
+    network_mode: "host"
+    volumes:
+      - /data/dhcpd:/data
+  # postrges DB for hms-bss
+  postgres-bss:
+    hostname: postgres-bss
+    container_name: postgres-bss
+    image: postgres:11-alpine
+    environment:
+      - POSTGRES_PASSWORD=bssuser
+      - POSTGRES_USER=bssuser
+      - POSTGRES_DB=bssdb
+    networks:
+      - bss
+  # boot-script-service
+  bss:
+    hostname: bss
+    container_name: bss
+    image: docker.io/bikeshack/hms-bss:v1.26.0-ochami
+    environment:
+      - POSTGRES_HOST=postgres-bss
+      - POSTGRES_PORT=5432
+      - SQL_USER=bssuser
+      - SQL_PASSWORD=bssuser
+    ports:
+      - '27778:27778'
+    depends_on:
+      - postgres-bss
+      - smd
+    networks:
+      - bss
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:27778/boot/v1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+  # postgres DB for SMD
+  postgres-smd:
+    container_name: postgres-smd
+    hostname: postgres-smd
     image: postgres:11-alpine
     environment:
       - POSTGRES_PASSWORD=hmsdsuser
       - POSTGRES_USER=hmsdsuser
       - POSTGRES_DB=hmsds
-    ports:
-      - "5432:5432"
     networks:
       - smd
+  # sets up postgres for SMD data
   smd-init:
-    image: docker.io/bikeshack/smd:v2.12.0
+    container_name: smd-init
+    image: docker.io/bikeshack/smd:v2.12.11-ochami
     environment:
-      - POSTGRES_HOST=postgres
-      - POSTGRES_PORT=5432
+      - SMD_DBHOST=postgres-smd
+      - SMD_DBPORT=5432
+      - SMD_DBUSER=hmsdsuser
+      - SMD_DBPASS=hmsdsuser
+      - SMD_DBNAME=hmsds
+      - SMD_DBOPTS=sslmode=disable
     hostname: smd-init
     depends_on:
-      - postgres
+      - postgres-smd
     networks:
       - smd
     entrypoint:
-      - /usr/local/bin/smd-init 
-      - -dbhost=postgres
+      - /smd-init 
+  # SMD 
   smd:
-    image: docker.io/bikeshack/smd:v2.12.0
+    container_name: smd
+    image: docker.io/bikeshack/smd:v2.12.11-ochami
     environment:
-      - POSTGRES_HOST=postgres
-      - POSTGRES_PORT=5432
+      - SMD_DBHOST=postgres-smd
+      - SMD_DBPORT=5432
+      - SMD_DBUSER=hmsdsuser
+      - SMD_DBPASS=hmsdsuser
+      - SMD_DBNAME=hmsds
+      - SMD_DBOPTS=sslmode=disable
     hostname: smd
     depends_on:
-      - postgres
+      - postgres-smd
       - smd-init
     ports:
       - "27779:27779"
