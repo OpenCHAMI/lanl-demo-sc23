@@ -94,26 +94,26 @@ services:
     container_name: smd-init
     image: docker.io/bikeshack/smd:v2.12.11-ochami
     environment:
-      - POSTGRES_HOST=postgres
+      - POSTGRES_HOST=postgres-smd
       - POSTGRES_PORT=5432
     hostname: smd-init
     depends_on:
-      - postgres
+      - postgres-smd
     networks:
       - smd
     entrypoint:
-      - /usr/local/bin/smd-init 
+      - /smd-init 
       - -dbhost=postgres
   # SMD 
   smd:
     container_name: smd
     image: docker.io/bikeshack/smd:v2.12.11-ochami
     environment:
-      - POSTGRES_HOST=postgres
+      - POSTGRES_HOST=postgres-smd
       - POSTGRES_PORT=5432
     hostname: smd
     depends_on:
-      - postgres
+      - postgres-smd
       - smd-init
     ports:
       - "27779:27779"
