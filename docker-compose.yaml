@@ -56,7 +56,7 @@ services:
   bss:
     hostname: bss
     container_name: bss
-    image: docker.io/bikeshack/hms-bss:v1.26.0-ochami
+    image: docker.io/bikeshack/hms-bss:v1.26.2-ochami
     environment:
       - POSTGRES_HOST=postgres-bss
       - POSTGRES_PORT=5432
