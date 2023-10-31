@@ -76,7 +76,19 @@ The VM is configured to boot via http. This requires some edits to the libvirt n
 
 The important line here is the link to the EFI boot executable (`http://10.100.0.1:9000/efi/BOOTX64.EFI`). This is hosted in s3 and accessed via http. A `grub.cfg` is also hosted here and contains the kernel and initrd locations as well as the kernel parameters. This is all covered in detail in the configuration README. 
 
-To actually start the VM simply run `virsh create ochami-vm.xml`. This is located in `/data/libvirt` for the demo. To connect to the console run `virsh console ochami-vm`. The VM will attempt to boot with PXE (ipv4 and ipv6) before http and I wasn't able to figure out how to change that. You can disconnect from the console with `ctl + ]` in case you miss the message. 
+To actually start the VM simply run 
+
+```bash
+virsh create ochami-vm.xml
+```
+
+This is located in `/data/libvirt` on `cg-head` for the demo. To connect to the console run 
+
+```bash
+virsh console ochami-vm
+```
+
+The VM will attempt to boot with PXE (ipv4 and ipv6) before http and I wasn't able to figure out how to change that. You can disconnect from the console with `ctl + ]` in case you miss the message. 
 
 You should see the VM boot into a Rocky 8 OS (all the systemd fun stuff), and towards the end you'll see cloud-init run. The cloud-init configs are pretty lengthy and will be covered in more details in the config readme. You can view the configs in `/data/cloud/cloud-init/52\:54\:00\:7c\:52\:cc/` on cg-head
 
@@ -84,7 +96,13 @@ You should see the VM boot into a Rocky 8 OS (all the systemd fun stuff), and to
 
 ## Microservice startup and scanning with Magellan
 
-The cloud-init configuration should have dropped a docker compose file in `/etc/docker-compose/demo-compose.yaml`. It is not setup to auto start so that things can be demoed. To start the demo run `docker compose -f /etc/docker-compose/demo-compose.yaml up -d`. You should see it pull the container images and begin running them. The end state should look something like:
+The cloud-init configuration should have dropped a docker compose file in `/etc/docker-compose/demo-compose.yaml`. It is not setup to auto start so that things can be demoed. To start the demo run 
+
+```bash 
+docker compose -f /etc/docker-compose/demo-compose.yaml up -d
+```
+
+You should see it pull the container images and begin running them. The end state should look something like:
 
 ```bash
 [+] Running 9/9
@@ -120,10 +138,7 @@ BSS:
 Now we should be ready to run Magellan to discover the nodes on our compute plane. 
 
 ```bash
-docker run bikeshack/magellan:latest \ 
-/magellan.sh \ 
---scan "--subnet 172.16.0.0/24 --port 443 --timeout 3" \ 
---collect "--user admin --pass password --host http://vm01 --port 27779"
+docker run bikeshack/magellan:latest /magellan.sh --scan "--subnet 172.16.0.0/24 --port 443 --timeout 3" --collect "--user admin --pass password --host http://ochami-vm --port 27779"
 ```
 
 The Magellan output is pretty verbose, but we can check to see if we have discovered things:
@@ -152,6 +167,20 @@ Awesome! Now we can add entries to BSS. Here is an example JSON payload:
 ```
 
 A lot going on here but some important lines are the `kernel` and `initrd` entries. These point to our s3 instance. The list of `macs` comes from inspecting the `http://ochami-vm:27779/hsm/v2/Inventory/ComponentEndpoints` output. The `params` are the standard kernel parameters used during PXE booting. The interesting ones are `root=live:http://10.100.0.1:9000/boot-images/boot-images/rocky8.8-compute-fbeb4ae`, this again points to our s3 instance, while `ds=nocloud-net;s=http://10.100.0.1:8000/cloud-init/compute/` points to our cloud-init server, which provides basic configs to our computes (when they boot) 
+
+To actually put this payload into action you can simply POST to the BSS endpoint
+
+```bash
+curl -X POST -H 'Content-Type: application/json' -d @bss-add-all.json http://ochami-vm:27778/boot/v1/bootparameters
+```
+
+Where `bss-add-all.json` contains the contents of the example JSON payload above.
+
+You can check that things were put into place with
+
+```bash
+curl http://ochami-vm:27778/boot/v1/bootparameters | jq
+```
 
 There are other containers running in our docker compose setup. The `tftp-server` serves out a pre-built `ipxe.efi` binary and `dhcpd-server` is pretty self-explanatory. The only intersting part is that we point the iPXE request to our bss microservice `filename "http://172.16.0.253:27778/boot/v1/bootparameters?mac=${mac}";`. You can see the full `dhcpd.conf` in `/data/dhcpd/dhcpd.conf` . 
 
@@ -190,9 +219,9 @@ Then power them on:
 Command completed successfully
 ```
 
-Some of the nodes can be stubborn so repeated `pm -1` calls may be needed
+Some of the nodes can be stubborn so repeated `pm -1` calls may be needed.
 
-Then we can connect to a console of one of our nodes
+Then we can connect to a console of one of our nodes.
 
 ```bash
 [root@cg-head]# conman cg02
@@ -234,6 +263,39 @@ You can now ssh to the computes from ochami-vm:
 [trcotton@ochami-vm ~]$ ssh cg02
 Warning: Permanently added 'cg02,172.16.0.2' (ECDSA) to the list of known hosts.
 Last login: Mon Oct 30 22:32:23 2023 from 172.16.0.253
+```
+
+There is some basic slurm functionality
+
+```bash
+[trcotton@ochami-vm ~]$ sinfo
+PARTITION AVAIL  TIMELIMIT  NODES  STATE NODELIST
+cluster*     up   infinite      6   idle cg[01-10]
+```
+
+and you can run some `HelloWorld` jobs 
+
+```bash
+[trcotton@ochami-vm ~]$ srun -N 5 echo HelloWorld
+HelloWorld
+HelloWorld
+HelloWorld
+HelloWorld
+HelloWorld
+```
+
+## Demo teardown
+
+teardown is pretty simple. Just destroy `ochami-vm`
+
+```bash
+virsh destroy ochami-vm
+```
+
+and power off the computes
+
+```bash
+pm -0 cg[01-10]
 ```
 
 
