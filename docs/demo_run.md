@@ -76,6 +76,26 @@ The VM is configured to boot via http. This requires some edits to the libvirt n
 
 The important line here is the link to the EFI boot executable (`http://10.100.0.1:9000/efi/BOOTX64.EFI`). This is hosted in s3 and accessed via http. A `grub.cfg` is also hosted here and contains the kernel and initrd locations as well as the kernel parameters. This is all covered in detail in the configuration README. 
 
+If using the default network for the bridge, you'll first need to take the network down before updating it:
+
+```bash
+virsh net-destroy default
+```
+
+Then, re-create it using the updated config (assuming it is saved as `ochami-net.xml`):
+
+```bash
+virsh net-create ochami-net.xml
+```
+
+Running `virsh net-list` should show that the default network is up:
+
+```
+ Name      State    Autostart   Persistent
+--------------------------------------------
+ default   active   yes         yes
+```
+
 To actually start the VM simply run 
 
 ```bash
@@ -144,7 +164,7 @@ docker run bikeshack/magellan:latest /magellan.sh --scan "--subnet 172.16.0.0/24
 The Magellan output is pretty verbose, but we can check to see if we have discovered things:
 
 ```bash
-[root@ochami-vm ~]# curl -s http://vm01:27779/hsm/v2/State/Components | jq
+[root@ochami-vm ~]# curl -s http://ochami-vm:27779/hsm/v2/State/Components | jq
 {
   "Components": [
     {
@@ -159,16 +179,23 @@ Awesome! Now we can add entries to BSS. Here is an example JSON payload:
 
 ```json
 {
-	"kernel": "http://10.100.0.1:9000/boot-images/efi-images/vmlinuz-4.18.0-477.21.1.el8_8.x86_64",
-	"initrd": "http://10.100.0.1:9000/boot-images/efi-images/initramfs-4.18.0-477.21.1.el8_8.x86_64.img",
-	"macs": ["b4:2e:99:a6:06:47","b4:2e:99:a6:61:ee","b4:2e:99:a9:37:bd","b4:2e:99:a6:63:39","b4:2e:99:a6:63:a1","b4:2e:99:a6:63:a9","b4:2e:99:a6:62:33","b4:2e:99:aa:33:7e","b4:2e:99:a6:61:9d"],
+	"kernel": "http://10.100.0.1:9000/boot-images/efi-images/vmlinuz-4.18.0-477.27.1.el8_8.x86_64",
+	"initrd": "http://10.100.0.1:9000/boot-images/efi-images/initramfs-4.18.0-477.27.1.el8_8.x86_64.img",
+	"macs": ["b4:2e:99:a6:5b:f1","b4:2e:99:a6:06:47","b4:2e:99:a6:61:ee","b4:2e:99:a9:37:bd","b4:2e:99:a6:63:39","b4:2e:99:a6:63:a1","b4:2e:99:a6:63:a9","b4:2e:99:a6:62:33","b4:2e:99:aa:33:7e","b4:2e:99:a6:61:9d"],
 	"params": "nomodeset ro root=live:http://10.100.0.1:9000/boot-images/boot-images/rocky8.8-compute-fbeb4ae ip=dhcp overlayroot=tmpfs overlayroot_cfgdisk=disabled apparmor=0 console=ttyS0,115200 ip6=off ds=nocloud-net;s=http://10.100.0.1:8000/cloud-init/compute/"
 }
 ```
 
-A lot going on here but some important lines are the `kernel` and `initrd` entries. These point to our s3 instance. The list of `macs` comes from inspecting the `http://ochami-vm:27779/hsm/v2/Inventory/ComponentEndpoints` output. The `params` are the standard kernel parameters used during PXE booting. The interesting ones are `root=live:http://10.100.0.1:9000/boot-images/boot-images/rocky8.8-compute-fbeb4ae`, this again points to our s3 instance, while `ds=nocloud-net;s=http://10.100.0.1:8000/cloud-init/compute/` points to our cloud-init server, which provides basic configs to our computes (when they boot) 
+A lot going on here but some important lines are the `kernel` and `initrd` entries. These point to our s3 instance. The list of `macs` comes from inspecting the `http://ochami-vm:27779/hsm/v2/Inventory/ComponentEndpoints` output. To get a list of just the boot MAC addresses (assumed to be the first Ethernet interface or `RedfishID` equal to `Onboard_0_0`), run:
 
-To actually put this payload into action you can simply POST to the BSS endpoint
+```bash
+curl http://ochami-vm:27779/hsm/v2/Inventory/ComponentEndpoints \
+  | jq '.ComponentEndpoints[].RedfishSystemInfo.EthernetNICInfo[] | select(.RedfishId=="Onboard_0_0").MACAddress'
+```
+
+The `params` are the standard kernel parameters used during PXE booting. The interesting ones are `root=live:http://10.100.0.1:9000/boot-images/boot-images/rocky8.8-compute-fbeb4ae`, this again points to our s3 instance, while `ds=nocloud-net;s=http://10.100.0.1:8000/cloud-init/compute/` points to our cloud-init server, which provides basic configs to our computes (when they boot).
+
+To actually put this payload into action you can simply POST to the BSS `bootparameters` endpoint:
 
 ```bash
 curl -X POST -H 'Content-Type: application/json' -d @bss-add-all.json http://ochami-vm:27778/boot/v1/bootparameters
@@ -180,6 +207,31 @@ You can check that things were put into place with
 
 ```bash
 curl http://ochami-vm:27778/boot/v1/bootparameters | jq
+```
+
+You should see:
+
+```json
+[
+  {
+    "macs": [
+      "b4:2e:99:a6:5b:f1",
+      "b4:2e:99:a6:06:47",
+      "b4:2e:99:a6:61:ee",
+      "b4:2e:99:a9:37:bd",
+      "b4:2e:99:a6:63:39",
+      "b4:2e:99:a6:63:a1",
+      "b4:2e:99:a6:63:a9",
+      "b4:2e:99:a6:62:33",
+      "b4:2e:99:aa:33:7e",
+      "b4:2e:99:a6:61:9d"
+    ],
+    "params": "nomodeset ro root=live:http://10.100.0.1:9000/boot-images/boot-images/rocky8.8-compute-fbeb4ae ip=dhcp overlayroot=tmpfs overlayroot_cfgdisk=disabled apparmor=0 console=ttyS0,115200 ip6=off ds=nocloud-net;s=http://10.100.0.1:8000/cloud-init/compute/",
+    "kernel": "http://10.100.0.1:9000/boot-images/efi-images/vmlinuz-4.18.0-477.27.1.el8_8.x86_64",
+    "initrd": "http://10.100.0.1:9000/boot-images/efi-images/initramfs-4.18.0-477.27.1.el8_8.x86_64.img",
+    ...
+  }
+]
 ```
 
 There are other containers running in our docker compose setup. The `tftp-server` serves out a pre-built `ipxe.efi` binary and `dhcpd-server` is pretty self-explanatory. The only intersting part is that we point the iPXE request to our bss microservice `filename "http://172.16.0.253:27778/boot/v1/bootparameters?mac=${mac}";`. You can see the full `dhcpd.conf` in `/data/dhcpd/dhcpd.conf` . 
@@ -244,15 +296,15 @@ Next server: 172.16.0.253
 Filename: http://172.16.0.253:27778/boot/v1/bootscript?mac=b4:2e:99:a6:61:ee
 http://172.16.0.253:27778/boot/v1/bootscript... ok
 bootscript : 684 bytes [script]
-http://10.100.0.1:9000/boot-images/efi-images/vmlinuz-4.18.0-477.21.1.el8_8.x86_64... ok
-http://10.100.0.1:9000/boot-images/efi-images/initramfs-4.18.0-477.21.1.el8_8.x86_64.img... ok
+http://10.100.0.1:9000/boot-images/efi-images/vmlinuz-4.18.0-477.27.1.el8_8.x86_64... ok
+http://10.100.0.1:9000/boot-images/efi-images/initramfs-4.18.0-477.27.1.el8_8.x86_64.img... ok
 ```
 
 And then hopefully something like:
 
 ```bash
 Rocky Linux 8.8 (Green Obsidian)
-Kernel 4.18.0-477.21.1.el8_8.x86_64 on an x86_64
+Kernel 4.18.0-477.27.1.el8_8.x86_64 on an x86_64
 
 cg02 login:
 ```
@@ -298,6 +350,18 @@ and power off the computes
 pm -0 cg[01-10]
 ```
 
+# Troubleshooting
 
+## Unable to Download Initramfs
 
+The image name may have changed (which happens when rebuilding in cloud-init). On `cg-head`, run `/data/s3-utils/bin/s3_get_img_names.sh` to get the image names. Output will be something like:
 
+```
+Objects in bucket boot-images
+boot-images/rocky8.8-compute-1196423
+boot-images/rocky8.8-dev-1196423
+boot-images/rocky8.8-prod-1196423
+efi-images/initramfs-4.18.0-477.27.1.el8_8.x86_64.img
+efi-images/vmlinuz-4.18.0-477.27.1.el8_8.x86_64
+rocky-custom.squashfs
+```
