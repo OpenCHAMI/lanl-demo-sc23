@@ -1,6 +1,17 @@
-# OCHAMI Demo -  Run
+# OCHAMI Demo - Run
 
 This README covers how to run the OCHAMI demo and assumes some services are pre-configured. This will showcase the starting of a VM (called `ochami-vm`) that will start all the needed docker containers for a system discover and boot. The VM is booted out of an s3 instance running via minnio and configured with cloud-init. The cloud-init configs are hosted on a simple python http server. 
+
+## Contents
+
+- [OCHAMI Demo - Run](#ochami-demo---run)
+   * [Contents](#contents)
+   * [OCHAMI VM creation](#ochami-vm-creation)
+   * [Microservice startup and scanning with Magellan](#microservice-startup-and-scanning-with-magellan)
+   * [Booting compute nodes](#booting-compute-nodes)
+   * [Demo teardown](#demo-teardown)
+   * [Troubleshooting](#troubleshooting)
+      + [Unable to Download Initramfs](#unable-to-download-initramfs)
 
 ## OCHAMI VM creation
 
@@ -350,11 +361,20 @@ and power off the computes
 pm -0 cg[01-10]
 ```
 
-# Troubleshooting
+## Troubleshooting
 
-## Unable to Download Initramfs
+### Unable to Download Initramfs
 
-The image name may have changed (which happens when rebuilding in cloud-init). On `cg-head`, run `/data/s3-utils/bin/s3_get_img_names.sh` to get the image names. Output will be something like:
+If an error like the following appears during kernel boot:
+
+```
+[   19.616700] dracut-initqueue[1187]: curl: (22) The requested URL returned error: 404 Not Found
+[   19.619201] dracut-initqueue[1181]: Warning: Downloading 'http://10.100.0.1:9000/boot-images/boot-images/rocky8.8-compute-fbeb4ae' failed!
+[   19.619418] dracut-initqueue[1171]: Warning: failed to download live image: error 0
+[   20.171953] IPv6: ADDRCONF(NETDEV_UP): eno2: link is not ready
+```
+
+then the image name may have changed (which happens when rebuilding in cloud-init). On `cg-head`, run `/data/s3-utils/bin/s3_get_img_names.sh` to get the image names. Output will be something like:
 
 ```
 Objects in bucket boot-images
@@ -365,3 +385,7 @@ efi-images/initramfs-4.18.0-477.27.1.el8_8.x86_64.img
 efi-images/vmlinuz-4.18.0-477.27.1.el8_8.x86_64
 rocky-custom.squashfs
 ```
+
+In this case, the `boot-images/rocky8.8-compute-1196423` image needs to be used instead of `boot-images/rocky8.8-compute-fbeb4ae`. Update the `params` field of the BSS boot config with the new URL (e.g. `http://10.100.0.1:9000/boot-images/boot-images/rocky8.8-compute-1196423` in this case).
+
+**NOTE:** Update functionality does not yet exist in BSS so the existing config will have to be deleted and recreated. Do this by using the same JSON payload that was POSTed to BSS, but send a DELETE request instead. Then, modify the payload and send a POST to recreate the config.
