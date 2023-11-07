@@ -1,6 +1,17 @@
-# OCHAMI Demo -  Run
+# OCHAMI Demo - Run
 
 This README covers how to run the OCHAMI demo and assumes some services are pre-configured. This will showcase the starting of a VM (called `ochami-vm`) that will start all the needed docker containers for a system discover and boot. The VM is booted out of an s3 instance running via minnio and configured with cloud-init. The cloud-init configs are hosted on a simple python http server. 
+
+## Contents
+
+- [OCHAMI Demo - Run](#ochami-demo---run)
+   * [Contents](#contents)
+   * [OCHAMI VM creation](#ochami-vm-creation)
+   * [Microservice startup and scanning with Magellan](#microservice-startup-and-scanning-with-magellan)
+   * [Booting compute nodes](#booting-compute-nodes)
+   * [Demo teardown](#demo-teardown)
+   * [Troubleshooting](#troubleshooting)
+      + [Unable to Download Initramfs](#unable-to-download-initramfs)
 
 ## OCHAMI VM creation
 
@@ -350,9 +361,9 @@ and power off the computes
 pm -0 cg[01-10]
 ```
 
-# Troubleshooting
+## Troubleshooting
 
-## Unable to Download Initramfs
+### Unable to Download Initramfs
 
 The image name may have changed (which happens when rebuilding in cloud-init). On `cg-head`, run `/data/s3-utils/bin/s3_get_img_names.sh` to get the image names. Output will be something like:
 
