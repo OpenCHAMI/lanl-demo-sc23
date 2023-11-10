@@ -1,0 +1,124 @@
+# MIT License
+#
+# (C) Copyright [2022] Hewlett Packard Enterprise Development LP
+#
+# Permission is hereby granted, free of charge, to any person obtaining a
+# copy of this software and associated documentation files (the "Software"),
+# to deal in the Software without restriction, including without limitation
+# the rights to use, copy, modify, merge, publish, distribute, sublicense,
+# and/or sell copies of the Software, and to permit persons to whom the
+# Software is furnished to do so, subject to the following conditions:
+#
+# The above copyright notice and this permission notice shall be included
+# in all copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL
+# THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR
+# OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
+# ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
+# OTHER DEALINGS IN THE SOFTWARE.
+
+version: '3.7'
+
+networks:
+  smd:
+  bss:
+
+services:
+  # TFTP server with built in ipxe binaries
+  tftp-server:
+    container_name: tftp-server
+    hostname: tftp-server
+    image: bikeshack/tftp-server:v1.1
+    network_mode: "host"
+  # Standard DHCP. Requires external config
+  dhcpd-server:
+    container_name: dhcpd-server
+    hostname: dhcpd
+    image: docker.io/networkboot/dhcpd:latest
+    network_mode: "host"
+    volumes:
+      - /data/dhcpd:/data
+  # postrges DB for hms-bss
+  postgres-bss:
+    hostname: postgres-bss
+    container_name: postgres-bss
+    image: postgres:11-alpine
+    environment:
+      - POSTGRES_PASSWORD=bssuser
+      - POSTGRES_USER=bssuser
+      - POSTGRES_DB=bssdb
+    networks:
+      - bss
+  # boot-script-service
+  bss:
+    hostname: bss
+    container_name: bss
+    image: docker.io/bikeshack/hms-bss:v1.26.2-ochami
+    environment:
+      - POSTGRES_HOST=postgres-bss
+      - POSTGRES_PORT=5432
+      - SQL_USER=bssuser
+      - SQL_PASSWORD=bssuser
+    ports:
+      - '27778:27778'
+    depends_on:
+      - postgres-bss
+      - smd
+    networks:
+      - bss
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:27778/boot/v1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+  # postgres DB for SMD
+  postgres-smd:
+    container_name: postgres-smd
+    hostname: postgres-smd
+    image: postgres:11-alpine
+    environment:
+      - POSTGRES_PASSWORD=hmsdsuser
+      - POSTGRES_USER=hmsdsuser
+      - POSTGRES_DB=hmsds
+    networks:
+      - smd
+  # sets up postgres for SMD data
+  smd-init:
+    container_name: smd-init
+    image: docker.io/bikeshack/smd:v2.12.11-ochami
+    environment:
+      - SMD_DBHOST=postgres-smd
+      - SMD_DBPORT=5432
+      - SMD_DBUSER=hmsdsuser
+      - SMD_DBPASS=hmsdsuser
+      - SMD_DBNAME=hmsds
+      - SMD_DBOPTS=sslmode=disable
+    hostname: smd-init
+    depends_on:
+      - postgres-smd
+    networks:
+      - smd
+    entrypoint:
+      - /smd-init 
+  # SMD 
+  smd:
+    container_name: smd
+    image: docker.io/bikeshack/smd:v2.12.11-ochami
+    environment:
+      - SMD_DBHOST=postgres-smd
+      - SMD_DBPORT=5432
+      - SMD_DBUSER=hmsdsuser
+      - SMD_DBPASS=hmsdsuser
+      - SMD_DBNAME=hmsds
+      - SMD_DBOPTS=sslmode=disable
+    hostname: smd
+    depends_on:
+      - postgres-smd
+      - smd-init
+    ports:
+      - "27779:27779"
+    networks:
+      - smd
