@@ -40,7 +40,7 @@ services:
     image: docker.io/networkboot/dhcpd:latest
     network_mode: "host"
     volumes:
-      - /data/dhcpd:/data
+      - ./data/dhcpd:/data
   # postrges DB for hms-bss
   postgres-bss:
     hostname: postgres-bss
@@ -122,3 +122,26 @@ services:
       - "27779:27779"
     networks:
       - smd
+
+  krakend-ce:
+    container_name: krakend-ce
+    image: devopsfaith/krakend
+    environment:
+      - KRAKEND_CONFIG=/etc/krakend/krakend.json
+      - KRAKEND_PORT=8080
+    hostname: krakend-ce
+    depends_on:
+      - bss
+      - smd
+    ports:
+      - "8080:8080"
+    networks:
+      - smd
+      - bss
+    volumes:
+      - ./krakend.json:/etc/krakend/krakend.json:ro
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/boot/v1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
