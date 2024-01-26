@@ -1,4 +1,8 @@
-# ochami-lanl-dev
+# THIS REPOSITORY IS NOT ACTIVE
+
+Our demo went great and we've moved on.  Much of what we learned is being used to create our [deployment-recipe](https://github.com/OpenCHAMI/deployment-recipes/tree/main/lanl/docker-compose) for the 2024 Supercomputer Institute at Los Alamos National Laboratory.
+
+## ochami-lanl-dev
 Demo Repository for ochami at LANL
 
 At SC23, the ochami team at LANL will demostrate using microservices from the Open Source CSM repositories to discover and boot a set of HPC nodes.  The purpose of this demo isn't to release a production-ready system management product.  It is to demonstrate that the community can make progress with the existing codebase.
